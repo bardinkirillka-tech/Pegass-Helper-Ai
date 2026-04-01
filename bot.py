@@ -4,6 +4,7 @@ from groq import Groq
 from flask import Flask
 import threading
 import time
+import re
 from datetime import datetime, timedelta
 
 # ========== ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
@@ -432,41 +433,36 @@ SCHEDULE = {
     ]
 }
 
-# ========== ФУНКЦИЯ ДЛЯ РАСПИСАНИЯ ==========
+# ========== ФУНКЦИИ РАСПИСАНИЯ ==========
 def get_schedule_for_date(date_str):
-    """Возвращает расписание на указанную дату"""
     if date_str in SCHEDULE:
         return "\n".join(SCHEDULE[date_str])
-    else:
-        return None
+    return None
 
 def get_today_schedule():
-    """Расписание на сегодня"""
     today = datetime.now().strftime("%d.%m.%Y")
-    schedule = get_schedule_for_date(today)
-    if schedule:
-        return f"📅 *Расписание на {today}:*\n\n{schedule}"
+    sched = get_schedule_for_date(today)
+    if sched:
+        return f"📅 *Расписание на {today}:*\n\n{sched}"
     else:
         return f"📅 *{today}* — пар нет или выходной день 🎉"
 
 def get_tomorrow_schedule():
-    """Расписание на завтра"""
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
-    schedule = get_schedule_for_date(tomorrow)
-    if schedule:
-        return f"📅 *Расписание на {tomorrow}:*\n\n{schedule}"
+    sched = get_schedule_for_date(tomorrow)
+    if sched:
+        return f"📅 *Расписание на {tomorrow}:*\n\n{sched}"
     else:
         return f"📅 *{tomorrow}* — пар нет или выходной день 🎉"
 
 def get_schedule_by_date(date_str):
-    """Расписание по конкретной дате"""
-    schedule = get_schedule_for_date(date_str)
-    if schedule:
-        return f"📅 *Расписание на {date_str}:*\n\n{schedule}"
+    sched = get_schedule_for_date(date_str)
+    if sched:
+        return f"📅 *Расписание на {date_str}:*\n\n{sched}"
     else:
-        return f"❌ На *{date_str}* расписания нет (возможно, выходной или дата не внесена)."
+        return f"❌ На *{date_str}* расписания нет (выходной или дата не внесена)."
 
-# ========== ФУНКЦИЯ ДЛЯ ИИ ==========
+# ========== ИИ ==========
 def get_ai_response(prompt):
     try:
         completion = client.chat.completions.create(
@@ -480,265 +476,84 @@ def get_ai_response(prompt):
         return f"❌ Ошибка: {str(e)}"
 
 # ========== КОМАНДЫ ==========
-
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     text = """
-🏥 *Pegass Medical AI* — твой помощник в учёбе!
+📅 *Pegass Helper* — твой помощник!
 
-📚 *Команды:*
-
-📅 *Расписание:*
+*Команды:*
 /today — пары на сегодня
 /tomorrow — пары на завтра
 /schedule [дата] — пары на дату (например /schedule 10.04.2026)
 
-🔬 *Медицинские команды:*
-/term [термин] — определение термина
-/drug [лекарство] — информация о препарате
-/disease [болезнь] — описание заболевания
-/anatomy [орган] — анатомия
-/symptom [симптом] — причины симптома
-/quiz [тема] — вопрос для самопроверки
-/explain [тема] — объяснение темы
-/normal [показатель] — нормы анализов
-/latin [слово] — перевод с латыни
-/mnemo [тема] — мнемонические правила
-/protocol [ситуация] — алгоритм действий
-/clear — очистить историю
-
-💬 Просто напиши вопрос по медицине!
+💬 Просто напиши любой вопрос — отвечу через ИИ!
 """
     bot.reply_to(message, text, parse_mode='Markdown')
 
 @bot.message_handler(commands=['help'])
 def send_help(message):
     text = """
-📋 *Все команды бота:*
+📋 *Доступные команды:*
 
-📅 *Расписание:*
-/today — сегодняшние пары
-/tomorrow — завтрашние пары
-/schedule 10.04.2026 — пары на конкретную дату
+/today — расписание на сегодня
+/tomorrow — расписание на завтра
+/schedule ДД.ММ.ГГГГ — расписание на конкретную дату
 
-🔬 *Медицина:*
-/term [термин] — определение
-/drug [лекарство] — о препарате
-/disease [болезнь] — о заболевании
-/anatomy [орган] — анатомия
-/symptom [симптом] — дифференциальная диагностика
-/quiz [тема] — вопрос для самопроверки
-/explain [тема] — объяснить тему
-/normal [показатель] — нормы анализов
-/latin [слово] — перевод с латыни
-/mnemo [тема] — мнемоника
-/protocol [ситуация] — алгоритм
+📌 Пример: `/schedule 15.04.2026`
 
-🔄 /clear — очистить историю
+💬 Также ты можешь просто задать любой вопрос — я отвечу.
 """
     bot.reply_to(message, text, parse_mode='Markdown')
 
-# ========== КОМАНДЫ РАСПИСАНИЯ ==========
-
 @bot.message_handler(commands=['today'])
 def today_schedule(message):
-    answer = get_today_schedule()
-    bot.reply_to(message, answer, parse_mode='Markdown')
+    bot.reply_to(message, get_today_schedule(), parse_mode='Markdown')
 
 @bot.message_handler(commands=['tomorrow'])
 def tomorrow_schedule(message):
-    answer = get_tomorrow_schedule()
-    bot.reply_to(message, answer, parse_mode='Markdown')
+    bot.reply_to(message, get_tomorrow_schedule(), parse_mode='Markdown')
 
 @bot.message_handler(commands=['schedule'])
 def schedule_by_date(message):
     parts = message.text.split()
     if len(parts) < 2:
-        bot.reply_to(message, "📝 *Пример:* `/schedule 10.04.2026`\n\nФормат даты: ДД.ММ.ГГГГ", parse_mode='Markdown')
+        bot.reply_to(message, "📝 *Пример:* `/schedule 10.04.2026`", parse_mode='Markdown')
         return
     date_str = parts[1]
-    # Простая проверка формата
     if not re.match(r'\d{2}\.\d{2}\.\d{4}', date_str):
-        bot.reply_to(message, "❌ Неверный формат даты. Используй: ДД.ММ.ГГГГ (например, 10.04.2026)", parse_mode='Markdown')
+        bot.reply_to(message, "❌ Неверный формат. Используй: ДД.ММ.ГГГГ", parse_mode='Markdown')
         return
     answer = get_schedule_by_date(date_str)
     bot.reply_to(message, answer, parse_mode='Markdown')
 
-# ========== МЕДИЦИНСКИЕ КОМАНДЫ ==========
-
-@bot.message_handler(commands=['term'])
-def medical_term(message):
-    term = message.text.replace('/term', '').strip()
-    if not term:
-        bot.reply_to(message, "📝 *Пример:* `/term гомеостаз`", parse_mode='Markdown')
-        return
-    prompt = f"Дай краткое определение медицинского термина '{term}'. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['drug'])
-def drug_info(message):
-    drug = message.text.replace('/drug', '').strip()
-    if not drug:
-        bot.reply_to(message, "💊 *Пример:* `/drug амоксициллин`", parse_mode='Markdown')
-        return
-    prompt = f"Дай информацию о лекарстве '{drug}': действие, дозировка, противопоказания. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['disease'])
-def disease_info(message):
-    disease = message.text.replace('/disease', '').strip()
-    if not disease:
-        bot.reply_to(message, "🩺 *Пример:* `/disease сахарный диабет`", parse_mode='Markdown')
-        return
-    prompt = f"Дай информацию о заболевании '{disease}': этиология, патогенез, клиника, лечение. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['anatomy'])
-def anatomy_info(message):
-    organ = message.text.replace('/anatomy', '').strip()
-    if not organ:
-        bot.reply_to(message, "🔬 *Пример:* `/anatomy сердце`", parse_mode='Markdown')
-        return
-    prompt = f"Опиши анатомическое строение и функции '{organ}'. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['symptom'])
-def symptom_info(message):
-    symptom = message.text.replace('/symptom', '').strip()
-    if not symptom:
-        bot.reply_to(message, "🩺 *Пример:* `/symptom кашель`", parse_mode='Markdown')
-        return
-    prompt = f"Для симптома '{symptom}' укажи возможные причины, заболевания, когда срочно к врачу. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['quiz'])
-def quiz(message):
-    topic = message.text.replace('/quiz', '').strip()
-    if not topic:
-        topic = "общая медицина"
-    prompt = f"Задай вопрос по теме '{topic}' для студента-медика. После вопроса дай правильный ответ с объяснением."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['explain'])
-def explain_topic(message):
-    topic = message.text.replace('/explain', '').strip()
-    if not topic:
-        bot.reply_to(message, "📚 *Пример:* `/explain цикл Кребса`", parse_mode='Markdown')
-        return
-    prompt = f"Объясни тему '{topic}' простыми словами для студента-медика. Структурированно и понятно. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['normal'])
-def normal_values(message):
-    test = message.text.replace('/normal', '').strip()
-    if not test:
-        bot.reply_to(message, "📊 *Пример:* `/normal глюкоза`\n\nПоказатели: глюкоза, гемоглобин, холестерин, лейкоциты и др.", parse_mode='Markdown')
-        return
-    prompt = f"Укажи нормальные значения для лабораторного показателя '{test}' в крови. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['latin'])
-def latin_term(message):
-    word = message.text.replace('/latin', '').strip()
-    if not word:
-        bot.reply_to(message, "🏛️ *Пример:* `/latin cor`", parse_mode='Markdown')
-        return
-    prompt = f"Переведи медицинский термин '{word}' с латыни на русский. Укажи значение и пример использования."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['mnemo'])
-def mnemonics(message):
-    topic = message.text.replace('/mnemo', '').strip()
-    if not topic:
-        topic = "черепные нервы"
-    prompt = f"Дай мнемонические правила для запоминания по теме '{topic}' в медицине. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['protocol'])
-def protocol(message):
-    situation = message.text.replace('/protocol', '').strip()
-    if not situation:
-        bot.reply_to(message, "🚑 *Пример:* `/protocol анафилактический шок`", parse_mode='Markdown')
-        return
-    prompt = f"Опиши алгоритм действий при '{situation}' (неотложное состояние). Пошагово. Ответ на русском языке."
-    answer = get_ai_response(prompt)
-    bot.reply_to(message, answer, parse_mode='Markdown')
-
-@bot.message_handler(commands=['clear'])
-def clear_history(message):
-    user_id = message.from_user.id
-    if user_id in user_histories:
-        user_histories[user_id] = []
-        bot.reply_to(message, "✅ *История диалога очищена!*", parse_mode='Markdown')
-    else:
-        bot.reply_to(message, "📭 *История и так пуста.*", parse_mode='Markdown')
-
-# ========== ОБРАБОТКА ТЕКСТА ==========
+# ========== ОБРАБОТКА ТЕКСТА (ИИ) ==========
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.from_user.id
     user_text = message.text
-    
+
     if user_id not in user_histories:
         user_histories[user_id] = []
-    
+
     history = user_histories[user_id]
     history.append({"role": "user", "content": user_text})
-    
     if len(history) > 10:
         history = history[-10:]
         user_histories[user_id] = history
-    
-    prompt = f"""Ты — ассистент для студента медицинского вуза. Отвечай на вопросы по медицине: анатомия, физиология, патология, фармакология, терапия, хирургия и другие медицинские дисциплины.
-Будь точным, структурированным, используй профессиональную терминологию, но объясняй понятно.
-Если вопрос не по медицине — вежливо направь к медицинской тематике.
 
-Вопрос: {user_text}
-
-Ответ:"""
-    
-    try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=500
-        )
-        answer = completion.choices[0].message.content
-        history.append({"role": "assistant", "content": answer})
-        bot.reply_to(message, answer)
-    except Exception as e:
-        bot.reply_to(message, f"❌ Ошибка: {str(e)}\nПопробуй позже.")
+    # Можно добавить контекст, но для простоты оставим прямой запрос
+    prompt = f"Ты — полезный помощник. Отвечай на вопросы пользователя.\n\nВопрос: {user_text}\n\nОтвет:"
+    answer = get_ai_response(prompt)
+    history.append({"role": "assistant", "content": answer})
+    bot.reply_to(message, answer)
 
 # ========== НАСТРОЙКА МЕНЮ ==========
 def set_bot_commands():
     commands = [
-        telebot.types.BotCommand("start", "🏥 Главное меню"),
+        telebot.types.BotCommand("start", "🏠 Главное меню"),
         telebot.types.BotCommand("today", "📅 Пары сегодня"),
         telebot.types.BotCommand("tomorrow", "📅 Пары завтра"),
         telebot.types.BotCommand("schedule", "📅 Пары на дату"),
-        telebot.types.BotCommand("term", "📖 Медтермин"),
-        telebot.types.BotCommand("drug", "💊 Лекарство"),
-        telebot.types.BotCommand("disease", "🩺 Болезнь"),
-        telebot.types.BotCommand("anatomy", "🔬 Анатомия"),
-        telebot.types.BotCommand("symptom", "🩺 Симптомы"),
-        telebot.types.BotCommand("quiz", "❓ Вопрос"),
-        telebot.types.BotCommand("explain", "📚 Объяснить"),
-        telebot.types.BotCommand("normal", "📊 Нормы"),
-        telebot.types.BotCommand("latin", "🏛️ Латынь"),
-        telebot.types.BotCommand("mnemo", "🧠 Мнемоника"),
-        telebot.types.BotCommand("protocol", "🚑 Алгоритм"),
-        telebot.types.BotCommand("clear", "🔄 Очистить"),
         telebot.types.BotCommand("help", "📋 Помощь"),
     ]
     try:
@@ -752,7 +567,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Pegass Medical AI Bot is running!"
+    return "Pegass Helper Bot is running!"
 
 @app.route('/health')
 def health():
@@ -771,6 +586,6 @@ if __name__ == "__main__":
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.daemon = True
     bot_thread.start()
-    
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
