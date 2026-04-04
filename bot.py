@@ -23,9 +23,12 @@ user_histories = {}
 
 # ========== 3. МЕДИЦИНСКИЕ МЕМЫ (20 ШТУК) ==========
 MEDICAL_MEMES = [
-    "https://share.icloud.com/photos/090drMAZVVzA6EjySYVPf68-Q",
-    "
-  
+    "https://i.ytimg.com/vi/Pi983xNVkKI/oar2.jpg",
+    "https://i.pinimg.com/736x/8f/15/18/8f15184f5663593c41ce01ff6a44de12.jpg",
+    "https://i.pinimg.com/736x/c8/97/bf/c897bfc6c40fa20c4999ddec89781eaa.jpg",
+    "https://i.pinimg.com/474x/08/20/08/082008c0d4f57cb2e000989be81b6eb7.jpg?nii=t",
+    "https://i.uralweb.ru/albums/fotos/f/034/0341aef15ceb8039dd3c4f7c9d5e9265.jpg",
+    "https://i.imgur.com/J4n0kxah.jpg", 
 ]
 
 
