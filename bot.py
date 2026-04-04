@@ -7,6 +7,10 @@ import time
 import re
 import random
 from datetime import datetime, timedelta
+from PIL import Image
+import img2pdf
+import io
+from telebot.types import InputFile
 
 # ========== 1. ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -20,6 +24,9 @@ if not TOKEN or not GROQ_API_KEY:
 client = Groq(api_key=GROQ_API_KEY)
 bot = telebot.TeleBot(TOKEN)
 user_histories = {}
+
+# Временное хранилище фотографий для PDF
+user_photos = {}
 
 # ========== 3. МЕДИЦИНСКИЕ МЕМЫ (20 ШТУК) ==========
 MEDICAL_MEMES = [
@@ -148,6 +155,29 @@ def get_schedule_by_date(date_str):
         return f"📅 *Расписание на {date_str}:*\n\n" + "\n".join(sched)
     return f"❌ На *{date_str}* расписания нет."
 
+def auto_crop_image(image_bytes):
+    """Автоматически обрезает белые/пустые поля по краям изображения"""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        bbox = img.getbbox()
+        
+        if bbox:
+            img_cropped = img.crop(bbox)
+        else:
+            img_cropped = img
+        
+        output = io.BytesIO()
+        img_cropped.save(output, format='JPEG', quality=95)
+        output.seek(0)
+        return output.getvalue()
+    except Exception as e:
+        print(f"Ошибка обрезки: {e}")
+        return image_bytes
+
 def get_ai_response(prompt):
     try:
         completion = client.chat.completions.create(
@@ -232,6 +262,70 @@ def meme_command(message):
     except Exception as e:
         reply_in_topic(message, f"❌ Не удалось отправить мем: {str(e)}")
 
+@bot.message_handler(commands=['make_pdf'])
+def start_pdf_collection(message):
+    user_id = message.from_user.id
+    user_photos[user_id] = []
+    reply_in_topic(message, "📸 *Режим создания PDF*\n\nОтправляй фотографии по одной или несколько сразу.\nКогда закончишь, напиши `/done`", parse_mode='Markdown')
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    user_id = message.from_user.id
+    
+    if user_id not in user_photos:
+        return
+    
+    file_id = message.photo[-1].file_id
+    user_photos[user_id].append(file_id)
+    
+    reply_in_topic(message, f"✅ Фото получено! Всего: {len(user_photos[user_id])}\nОтправь ещё или напиши `/done`")
+
+@bot.message_handler(commands=['done'])
+def create_pdf(message):
+    user_id = message.from_user.id
+    
+    if user_id not in user_photos or len(user_photos[user_id]) == 0:
+        reply_in_topic(message, "❌ Нет фотографий. Сначала отправь фото, затем напиши `/make_pdf`")
+        return
+    
+    reply_in_topic(message, "⏳ Обрабатываю фотографии...")
+    
+    try:
+        pdf_images = []
+        
+        for file_id in user_photos[user_id]:
+            file_info = bot.get_file(file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            cropped = auto_crop_image(downloaded_file)
+            pdf_images.append(cropped)
+        
+        pdf_bytes = img2pdf.convert(pdf_images)
+        
+        bot.send_document(
+            chat_id=message.chat.id,
+            document=InputFile(io.BytesIO(pdf_bytes), filename='cropped_photos.pdf'),
+            caption="📄 *PDF с обрезанными фотографиями*",
+            message_thread_id=message.message_thread_id,
+            parse_mode='Markdown'
+        )
+        
+        user_photos[user_id] = []
+        reply_in_topic(message, "✅ Готово! Чтобы создать новый PDF, отправь `/make_pdf`")
+        
+    except Exception as e:
+        reply_in_topic(message, f"❌ Ошибка: {str(e)}")
+        user_photos[user_id] = []
+
+@bot.message_handler(commands=['cancel_pdf'])
+def cancel_pdf(message):
+    user_id = message.from_user.id
+    if user_id in user_photos and user_photos[user_id]:
+        count = len(user_photos[user_id])
+        user_photos[user_id] = []
+        reply_in_topic(message, f"❌ Сбор отменён. {count} фото удалено.")
+    else:
+        reply_in_topic(message, "Нет активного сбора фотографий.")
+
 # ========== 7. ОБРАБОТКА ОБЫЧНЫХ СООБЩЕНИЙ (ИИ) ==========
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
@@ -267,6 +361,8 @@ def set_bot_commands():
         telebot.types.BotCommand("schedule", "📅 Пары на дату"),
         telebot.types.BotCommand("meme", "🩺 Медицинский мем"),
         telebot.types.BotCommand("help", "📋 Помощь"),
+        telebot.types.BotCommand("make_pdf", "📄 Создать PDF из фото"),
+        telebot.types.BotCommand("cancel_pdf", "❌ Отменить создание PDF"),
     ]
     try:
         bot.set_my_commands(commands)
