@@ -462,6 +462,35 @@ def get_schedule_by_date(date_str):
     else:
         return f"❌ На *{date_str}* расписания нет (выходной или дата не внесена)."
 
+# ========== МЕДИЦИНСКИЕ МЕМЫ ==========
+import random
+
+MEMES = [
+    "https://i.pinimg.com/originals/78/c2/2e/78c22eaf43e9b7327a9a9b49752662c6.jpg?nii=t"
+    "https://i.pinimg.com/736x/c8/97/bf/c897bfc6c40fa20c4999ddec89781eaa.jpg"
+    "https://i.pinimg.com/originals/1f/d6/cb/1fd6cb91e8fba48f87749308cb5454a8.jpg"
+    "https://i.uralweb.ru/albums/fotos/f/034/0341aef15ceb8039dd3c4f7c9d5e9265.jpg"
+    "https://img1.reactor.cc/pics/post/%D0%9A%D0%BE%D0%BC%D0%B8%D0%BA%D1%81%D1%8B-Gunshow-%D0%BC%D0%B5%D0%B4%D0%B8%D1%86%D0%B8%D0%BD%D0%B0-%D0%BF%D0%B5%D1%81%D0%BE%D1%87%D0%BD%D0%B8%D1%86%D0%B0-996633.jpeg"
+    "https://i.pinimg.com/736x/8f/15/18/8f15184f5663593c41ce01ff6a44de12.jpg"
+    "https://i.pinimg.com/736x/ab/64/ec/ab64ec6deee75ab42636a585abe19f91.jpg"
+]
+
+@bot.message_handler(commands=['meme'])
+def send_meme(message):
+    meme_url = random.choice(MEMES)
+    try:
+        bot.send_photo(
+            message.chat.id, 
+            meme_url, 
+            caption="🩺 Медицинский мем дня",
+            message_thread_id=message.message_thread_id
+        )
+    except Exception as e:
+        bot.send_message(
+            message.chat.id, 
+            "❌ Не удалось отправить мем, но врачи уже работают над этим 🚑",
+            message_thread_id=message.message_thread_id
+        )
 # ========== ИИ ==========
 def get_ai_response(prompt):
     try:
