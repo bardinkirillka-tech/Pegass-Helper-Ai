@@ -1,5 +1,4 @@
-pyTelegramBotAPI>=4.25.0
-groq>=0.9.0
-flask>=3.0.0
-Pillow>=10.0.0
-img2pdf>=0.4.8
+pyTelegramBotAPI==4.25.0
+groq==0.9.0
+flask==3.0.0
+img2pdf==0.4.8
