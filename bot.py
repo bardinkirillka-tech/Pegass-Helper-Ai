@@ -31,11 +31,8 @@ MEDICAL_MEMES = [
     "https://i.pinimg.com/736x/c8/97/bf/c897bfc6c40fa20c4999ddec89781eaa.jpg",
     "https://i.pinimg.com/474x/08/20/08/082008c0d4f57cb2e000989be81b6eb7.jpg?nii=t",
     "https://i.uralweb.ru/albums/fotos/f/034/0341aef15ceb8039dd3c4f7c9d5e9265.jpg",
-    "https://i.imgur.com/J4n0kxah.jpg", 
-    
+    "https://i.imgur.com/J4n0kxah.jpg",
 ]
-
-
 # ========== 4. ПОЛНОЕ РАСПИСАНИЕ (ВСЕ ДАТЫ) ==========
 SCHEDULE = {
     "01.04.2026": ["1. 9:00-10:40 - Фл (практическое занятие)", "2. 11:05-12:50 - Фл (практическое занятие)"],
@@ -281,7 +278,7 @@ def create_pdf(message):
         c = canvas.Canvas(pdf_bytes, pagesize=A4)
         w, h = A4
         
-        # Загружаем водяной знак из файла
+        # Загружаем водяной знак
         watermark_img = None
         if os.path.exists("watermark.png"):
             try:
@@ -307,7 +304,7 @@ def create_pdf(message):
                            width=watermark_width, height=watermark_height, 
                            mask='auto', preserveAspectRatio=True)
             
-            # Добавляем дату
+            # Дата
             c.setFont("Helvetica", 6)
             c.setFillColorRGB(0.5, 0.5, 0.5)
             c.drawRightString(w - 20, 20, datetime.now().strftime("%d.%m.%Y"))
@@ -391,15 +388,15 @@ def index():
 
 @app.route('/health')
 def health():
-    return "OK", 200
+    return "OK"
 
 @app.route('/ping')
 def ping():
-    return "OK", 200
+    return "OK"
 
 # ========== ЗАПУСК ==========
 def run_bot():
-    time.sleep(3)
+    time.sleep(5)
     try:
         bot.polling(none_stop=True, interval=1)
     except Exception as e:
