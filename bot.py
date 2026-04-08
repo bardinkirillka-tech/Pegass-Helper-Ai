@@ -6,12 +6,11 @@ import threading
 import time
 import re
 import random
-from datetime import datetime, timedelta
-import img2pdf
 import io
+from datetime import datetime, timedelta
 from telebot.types import InputFile
 
-# ========== 1. ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
+# ========== ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
@@ -19,12 +18,10 @@ if not TOKEN or not GROQ_API_KEY:
     print("Ошибка: не заданы TELEGRAM_TOKEN или GROQ_API_KEY")
     exit(1)
 
-# ========== 2. ИНИЦИАЛИЗАЦИЯ ==========
+# ========== ИНИЦИАЛИЗАЦИЯ ==========
 client = Groq(api_key=GROQ_API_KEY)
 bot = telebot.TeleBot(TOKEN)
 user_histories = {}
-
-# Временное хранилище фотографий для PDF
 user_photos = {}
 
 # ========== 3. МЕДИЦИНСКИЕ МЕМЫ (20 ШТУК) ==========
@@ -35,6 +32,7 @@ MEDICAL_MEMES = [
     "https://i.pinimg.com/474x/08/20/08/082008c0d4f57cb2e000989be81b6eb7.jpg?nii=t",
     "https://i.uralweb.ru/albums/fotos/f/034/0341aef15ceb8039dd3c4f7c9d5e9265.jpg",
     "https://i.imgur.com/J4n0kxah.jpg", 
+    
 ]
 
 
@@ -130,34 +128,33 @@ SCHEDULE = {
     "24.07.2026": ["1. 9:00-10:40 - пр(сп) (практика)"]
 }
 
-# ========== 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+# ========== ФУНКЦИИ РАСПИСАНИЯ ==========
 def get_schedule_for_date(date_str):
-    return SCHEDULE.get(date_str)
+    if date_str in SCHEDULE:
+        return "\n".join(SCHEDULE[date_str])
+    return None
 
 def get_today_schedule():
     today = datetime.now().strftime("%d.%m.%Y")
     sched = get_schedule_for_date(today)
     if sched:
-        return f"📅 *Расписание на {today}:*\n\n" + "\n".join(sched)
-    return f"📅 *{today}* — пар нет или выходной день 🎉"
+        return f"📅 *Расписание на {today}:*\n\n{sched}"
+    return f"📅 *{today}* — пар нет"
 
 def get_tomorrow_schedule():
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
     sched = get_schedule_for_date(tomorrow)
     if sched:
-        return f"📅 *Расписание на {tomorrow}:*\n\n" + "\n".join(sched)
-    return f"📅 *{tomorrow}* — пар нет или выходной день 🎉"
+        return f"📅 *Расписание на {tomorrow}:*\n\n{sched}"
+    return f"📅 *{tomorrow}* — пар нет"
 
 def get_schedule_by_date(date_str):
     sched = get_schedule_for_date(date_str)
     if sched:
-        return f"📅 *Расписание на {date_str}:*\n\n" + "\n".join(sched)
-    return f"❌ На *{date_str}* расписания нет."
+        return f"📅 *Расписание на {date_str}:*\n\n{sched}"
+    return f"❌ На *{date_str}* расписания нет"
 
-def auto_crop_image(image_bytes):
-    """Просто возвращает фото без изменений (заглушка)"""
-    return image_bytes
-
+# ========== ИИ ==========
 def get_ai_response(prompt):
     try:
         completion = client.chat.completions.create(
@@ -170,8 +167,8 @@ def get_ai_response(prompt):
     except Exception as e:
         return f"❌ Ошибка ИИ: {str(e)}"
 
+# ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ==========
 def reply_in_topic(message, text, parse_mode='Markdown'):
-    """Отправляет сообщение в тот же топик (тему), откуда пришёл запрос."""
     try:
         bot.send_message(
             chat_id=message.chat.id,
@@ -180,33 +177,41 @@ def reply_in_topic(message, text, parse_mode='Markdown'):
             parse_mode=parse_mode
         )
     except Exception as e:
-        print(f"Ошибка отправки: {e}")
+        print(f"Ошибка: {e}")
 
-# ========== 6. ОБРАБОТЧИКИ КОМАНД ==========
+# ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    text = (
-        "📅 *Pegass Helper* — твой умный помощник!\n\n"
-        "*Команды:*\n"
-        "/today — пары на сегодня\n"
-        "/tomorrow — пары на завтра\n"
-        "/schedule [дата] — пары на дату\n"
-        "/meme — случайный медицинский мем\n"
-        "/help — помощь\n\n"
-        "💬 Просто напиши любой вопрос — ИИ ответит!"
-    )
+    text = """
+📅 *Pegass Helper* — твой помощник!
+
+*Команды:*
+/today — пары на сегодня
+/tomorrow — пары на завтра
+/schedule [дата] — пары на дату
+/meme — случайный мем
+/make_pdf — создать PDF из фото
+/help — помощь
+
+💬 Просто напиши любой вопрос
+"""
     reply_in_topic(message, text)
 
 @bot.message_handler(commands=['help'])
 def send_help(message):
-    text = (
-        "📋 *Доступные команды:*\n\n"
-        "/today — расписание на сегодня\n"
-        "/tomorrow — расписание на завтра\n"
-        "/schedule ДД.ММ.ГГГГ — расписание на дату\n"
-        "/meme — случайный медицинский мем\n\n"
-        "💬 Также ты можешь просто задать любой вопрос — я отвечу через ИИ."
-    )
+    text = """
+📋 *Команды:*
+
+/today — расписание на сегодня
+/tomorrow — расписание на завтра
+/schedule ДД.ММ.ГГГГ — расписание на дату
+/meme — случайный мем
+/make_pdf — собрать фото в PDF
+/done — закончить сбор фото
+/cancel_pdf — отменить сбор
+
+💬 Просто задай любой вопрос
+"""
     reply_in_topic(message, text)
 
 @bot.message_handler(commands=['today'])
@@ -225,64 +230,97 @@ def schedule_command(message):
         return
     date_str = parts[1]
     if not re.match(r'\d{2}\.\d{2}\.\d{4}', date_str):
-        reply_in_topic(message, "❌ Неверный формат. Используй: ДД.ММ.ГГГГ")
+        reply_in_topic(message, "❌ Формат: ДД.ММ.ГГГГ")
         return
     reply_in_topic(message, get_schedule_by_date(date_str))
 
 @bot.message_handler(commands=['meme'])
 def meme_command(message):
-    meme_url = random.choice(MEDICAL_MEMES)
+    meme_url = random.choice(MEMES)
     try:
         bot.send_photo(
             chat_id=message.chat.id,
             photo=meme_url,
             message_thread_id=message.message_thread_id,
-            caption="🩺 Медицинский мем дня"
+            caption="🩺 Медицинский мем"
         )
-    except Exception as e:
-        reply_in_topic(message, f"❌ Не удалось отправить мем: {str(e)}")
+    except:
+        reply_in_topic(message, "❌ Не удалось отправить мем")
 
 @bot.message_handler(commands=['make_pdf'])
-def start_pdf_collection(message):
+def start_pdf(message):
     user_id = message.from_user.id
     user_photos[user_id] = []
-    reply_in_topic(message, "📸 *Режим создания PDF*\n\nОтправляй фотографии (можно несколько). Когда закончишь — напиши `/done`", parse_mode='Markdown')
+    reply_in_topic(message, "📸 Отправляй фото. Когда закончишь — /done")
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     user_id = message.from_user.id
-    
     if user_id not in user_photos:
         return
-    
     file_id = message.photo[-1].file_id
     user_photos[user_id].append(file_id)
-    
-    reply_in_topic(message, f"✅ Фото получено! Всего: {len(user_photos[user_id])}")
+    reply_in_topic(message, f"✅ Фото {len(user_photos[user_id])} получено")
 
 @bot.message_handler(commands=['done'])
 def create_pdf(message):
-    user_id = message.from_user.id
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    from reportlab.lib.units import mm
     
+    user_id = message.from_user.id
     if user_id not in user_photos or len(user_photos[user_id]) == 0:
-        reply_in_topic(message, "❌ Нет фотографий. Сначала отправь фото, затем напиши `/make_pdf`")
+        reply_in_topic(message, "❌ Нет фото. Сначала /make_pdf")
         return
     
-    reply_in_topic(message, "⏳ Создаю PDF... Подождите немного.")
+    reply_in_topic(message, "⏳ Создаю PDF с водяным знаком...")
     
     try:
-        pdf_images = []
+        pdf_bytes = io.BytesIO()
+        c = canvas.Canvas(pdf_bytes, pagesize=A4)
+        w, h = A4
+        
+        # Загружаем водяной знак из файла
+        watermark_img = None
+        if os.path.exists("watermark.png"):
+            try:
+                watermark_img = ImageReader("watermark.png")
+            except:
+                pass
+        
         for file_id in user_photos[user_id]:
             file_info = bot.get_file(file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
-            pdf_images.append(downloaded_file)
+            img_data = bot.download_file(file_info.file_path)
+            img = ImageReader(io.BytesIO(img_data))
+            
+            # Вставляем фото
+            c.drawImage(img, 0, 0, width=w, height=h, preserveAspectRatio=True, anchor='c')
+            
+            # Накладываем водяной знак
+            if watermark_img:
+                watermark_width = 80
+                watermark_height = 80
+                x_pos = w - watermark_width - 20
+                y_pos = 20
+                c.drawImage(watermark_img, x_pos, y_pos, 
+                           width=watermark_width, height=watermark_height, 
+                           mask='auto', preserveAspectRatio=True)
+            
+            # Добавляем дату
+            c.setFont("Helvetica", 6)
+            c.setFillColorRGB(0.5, 0.5, 0.5)
+            c.drawRightString(w - 20, 20, datetime.now().strftime("%d.%m.%Y"))
+            
+            c.showPage()
         
-        pdf_bytes = img2pdf.convert(pdf_images)
+        c.save()
+        pdf_bytes.seek(0)
         
         bot.send_document(
             chat_id=message.chat.id,
-            document=InputFile(io.BytesIO(pdf_bytes), filename='photos.pdf'),
-            caption="📄 *Готовый PDF-файл*",
+            document=InputFile(pdf_bytes, filename='photos_watermark.pdf'),
+            caption="📄 *PDF с водяным знаком*",
             message_thread_id=message.message_thread_id,
             parse_mode='Markdown'
         )
@@ -296,63 +334,60 @@ def create_pdf(message):
 @bot.message_handler(commands=['cancel_pdf'])
 def cancel_pdf(message):
     user_id = message.from_user.id
-    if user_id in user_photos and user_photos[user_id]:
+    if user_id in user_photos:
         count = len(user_photos[user_id])
         user_photos[user_id] = []
-        reply_in_topic(message, f"❌ Отменено. {count} фото удалено.")
+        reply_in_topic(message, f"❌ Отменено. {count} фото удалено")
     else:
-        reply_in_topic(message, "Нет активного сбора.")
+        reply_in_topic(message, "Нет активного сбора")
 
-# ========== 7. ОБРАБОТКА ОБЫЧНЫХ СООБЩЕНИЙ (ИИ) ==========
+# ========== ОБРАБОТКА ТЕКСТА ==========
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     user_id = message.from_user.id
     user_text = message.text
-
-    # Инициализация истории для пользователя
+    
     if user_id not in user_histories:
         user_histories[user_id] = []
-
+    
     history = user_histories[user_id]
     history.append({"role": "user", "content": user_text})
     if len(history) > 10:
         history = history[-10:]
-        user_histories[user_id] = history
-
-    prompt = f"Ты — полезный помощник. Отвечай на вопросы пользователя.\n\nВопрос: {user_text}\n\nОтвет:"
+    
+    prompt = f"Отвечай на вопрос: {user_text}"
     answer = get_ai_response(prompt)
     history.append({"role": "assistant", "content": answer})
-
+    
     bot.send_message(
         chat_id=message.chat.id,
         text=answer,
         message_thread_id=message.message_thread_id
     )
 
-# ========== 8. НАСТРОЙКА МЕНЮ В ТЕЛЕГРАМ ==========
+# ========== МЕНЮ ==========
 def set_bot_commands():
     commands = [
-        telebot.types.BotCommand("start", "🏠 Главное меню"),
-        telebot.types.BotCommand("today", "📅 Пары сегодня"),
-        telebot.types.BotCommand("tomorrow", "📅 Пары завтра"),
-        telebot.types.BotCommand("schedule", "📅 Пары на дату"),
-        telebot.types.BotCommand("meme", "🩺 Медицинский мем"),
-        telebot.types.BotCommand("help", "📋 Помощь"),
-        telebot.types.BotCommand("make_pdf", "📄 Создать PDF из фото"),
-        telebot.types.BotCommand("cancel_pdf", "❌ Отменить создание PDF"),
+        telebot.types.BotCommand("start", "Главное меню"),
+        telebot.types.BotCommand("today", "Пары сегодня"),
+        telebot.types.BotCommand("tomorrow", "Пары завтра"),
+        telebot.types.BotCommand("schedule", "Пары на дату"),
+        telebot.types.BotCommand("meme", "Случайный мем"),
+        telebot.types.BotCommand("make_pdf", "Создать PDF из фото"),
+        telebot.types.BotCommand("cancel_pdf", "Отменить PDF"),
+        telebot.types.BotCommand("help", "Помощь"),
     ]
     try:
         bot.set_my_commands(commands)
-        print("✅ Меню команд установлено")
     except Exception as e:
-        print(f"❌ Ошибка меню: {e}")
+        print(f"Ошибка меню: {e}")
 
-# ========== 9. FLASK ДЛЯ RENDER ==========
+# ========== FLASK ==========
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Pegass Helper Bot is running!"
+    return "Bot is running!"
 
 @app.route('/health')
 def health():
@@ -362,13 +397,13 @@ def health():
 def ping():
     return "OK", 200
 
-# ========== 10. ЗАПУСК БОТА ==========
+# ========== ЗАПУСК ==========
 def run_bot():
     time.sleep(3)
     try:
         bot.polling(none_stop=True, interval=1)
     except Exception as e:
-        print(f"❌ Ошибка polling: {e}")
+        print(f"Ошибка: {e}")
 
 if __name__ == "__main__":
     set_bot_commands()
