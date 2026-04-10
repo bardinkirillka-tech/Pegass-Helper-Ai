@@ -396,7 +396,17 @@ def ping():
 
 # ========== ЗАПУСК ==========
 def run_bot():
-    time.sleep(5)
+    if __name__ == "__main__":
+    set_bot_commands()
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    
+    time.sleep(10)
+    from waitress import serve
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting Waitress server on port {port}")
+    serve(app, host="0.0.0.0", port=port)
     try:
         bot.polling(none_stop=True, interval=1)
     except Exception as e:
